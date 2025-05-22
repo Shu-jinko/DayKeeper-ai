@@ -5,6 +5,9 @@ import tensorflow as tf
 from transformers import BertTokenizerFast, TFBertForSequenceClassification
 from dotenv import load_dotenv
 import os
+from gliner import GLiNER
+import MeCab
+import re
 
 # openai key 설정
 load_dotenv()
@@ -87,14 +90,52 @@ print(result_json)
 result = classify_text(user_input)
 print_emotion(result)
 
-# from gliner import GLiNER
-# # 초기 실행시
-# #model = GLiNER.from_pretrained("urchade/gliner_multiv2.1", force_download=True)
 
-# model = GLiNER.from_pretrained("urchade/gliner_multiv2.1")
-# labels = ["date", "person", "location", "organization", "event", "time"]
+# 모델 불러오기
+model = GLiNER.from_pretrained("urchade/gliner_multiv2.1")
 
-# entities = model.predict_entities(text, labels, threshold=0.3)
+# MeCab-ko-msvc 태거 설정
+tagger = MeCab.Tagger()
 
-# for entity in entities:
-#     print(entity["text"], "=>", entity["label"])
+# 명사 추출 함수
+def extract_nouns(text):
+    result = []
+    parsed = tagger.parse(text)
+    for line in parsed.split('\n'):
+        if line == 'EOS' or line == '':
+            continue
+        surface, features = line.split('\t')
+        pos = features.split(',')[0]
+        if pos in ('NNG', 'NNP'):  # 일반명사, 고유명사
+            result.append(surface)
+    return result
+
+# 분석 대상 텍스트
+text = user_input
+
+# 개체명 라벨 정의
+labels = ["date", "person", "location", "organization", "event", "time", "family"]
+
+# 문장 단위 분할
+sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+
+# 개체 예측 및 명사 정제
+all_entities = []
+
+for sent in sentences:
+    entities = model.predict_entities(sent, labels, threshold=0.5)
+    for entity in entities:
+        noun_list = extract_nouns(entity["text"])
+        if noun_list:  # 명사 없으면 스킵
+            cleaned = ' '.join(noun_list)
+            all_entities.append({
+                "text": cleaned,
+                "label": entity["label"]
+            })
+
+# 중복 제거
+unique_entities = { (e["text"], e["label"]) for e in all_entities }
+
+# 출력
+for text_label in unique_entities:
+    print(text_label[0], "=>", text_label[1])

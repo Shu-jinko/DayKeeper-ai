@@ -123,7 +123,7 @@ sentences = re.split(r'(?<=[.!?])\s+', text.strip())
 all_entities = []
 
 for sent in sentences:
-    entities = model.predict_entities(sent, labels, threshold=0.5)
+    entities = model.predict_entities(sent, labels, threshold=0.4)
     for entity in entities:
         noun_list = extract_nouns(entity["text"])
         if noun_list:  # 명사 없으면 스킵
